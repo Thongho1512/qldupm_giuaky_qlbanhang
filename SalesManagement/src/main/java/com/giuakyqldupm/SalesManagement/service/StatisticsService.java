@@ -1,51 +1,87 @@
 package com.giuakyqldupm.SalesManagement.service;
 
 import com.giuakyqldupm.SalesManagement.dto.response.StatisticsResponse;
-import com.giuakyqldupm.SalesManagement.entity.Order;
-import com.giuakyqldupm.SalesManagement.repository.OrderItemRepository;
 import com.giuakyqldupm.SalesManagement.repository.OrderRepository;
+
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
+import jakarta.persistence.StoredProcedureQuery;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
-import java.util.*;
-import java.util.stream.Collectors;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
 public class StatisticsService {
 
-    private final OrderRepository orderRepository;
-    private final OrderItemRepository orderItemRepository;
-    private final UserService userService;
-    private final ProductService productService;
+    @PersistenceContext
+    private EntityManager entityManager;
 
     public StatisticsResponse getDashboardStatistics() {
-        LocalDateTime now = LocalDateTime.now();
-        LocalDateTime startOfMonth = now.withDayOfMonth(1).withHour(0).withMinute(0).withSecond(0);
 
-        BigDecimal totalRevenue = orderRepository.calculateRevenueBetweenDates(
-                startOfMonth, now);
+        // =============================================
+        // GỌI STORED PROCEDURE (1 lần gọi duy nhất)
+        // =============================================
+        StoredProcedureQuery query = entityManager
+                .createStoredProcedureQuery("sp_GetDashboardStatistics");
 
-        if (totalRevenue == null) {
-            totalRevenue = BigDecimal.ZERO;
+        // Thực thi
+        query.execute();
+
+        // =============================================
+        // XỬ LÝ RESULT SET 1: Thống kê tổng quan
+        // =============================================
+        List<Object[]> overviewResults = query.getResultList();
+        Object[] overview = overviewResults.get(0);
+
+        Long totalOrders = ((Number) overview[0]).longValue();
+        Long pendingOrders = ((Number) overview[1]).longValue();
+        Long shippingOrders = ((Number) overview[2]).longValue();
+        Long completedOrders = ((Number) overview[3]).longValue();
+        Long cancelledOrders = ((Number) overview[4]).longValue();
+        BigDecimal totalRevenue = (BigDecimal) overview[5];
+        Long totalCustomers = ((Number) overview[6]).longValue();
+        Long totalProducts = ((Number) overview[7]).longValue();
+
+        // =============================================
+        // XỬ LÝ RESULT SET 2: Top sản phẩm
+        // =============================================
+        query.hasMoreResults(); // Di chuyển đến result set tiếp theo
+        List<Object[]> topProductsResults = query.getResultList();
+
+        List<StatisticsResponse.TopSellingProduct> topSellingProducts = new ArrayList<>();
+
+        for (Object[] row : topProductsResults) {
+            StatisticsResponse.TopSellingProduct product = StatisticsResponse.TopSellingProduct.builder()
+                    .productId(((Number) row[0]).longValue())
+                    .productName((String) row[1])
+                    .totalQuantitySold(((Number) row[2]).longValue())
+                    .totalRevenue((BigDecimal) row[3])
+                    .build();
+            topSellingProducts.add(product);
         }
 
-        Long totalOrders = orderRepository.count();
-        Long totalCustomers = userService.getTotalCustomers();
-        Long totalProducts = productService.getTotalProducts();
+        // =============================================
+        // XỬ LÝ RESULT SET 3: Doanh thu theo ngày
+        // =============================================
+        query.hasMoreResults(); // Di chuyển đến result set tiếp theo
+        List<Object[]> revenueResults = query.getResultList();
 
-        Long pendingOrders = orderRepository.countByStatus(Order.OrderStatus.PENDING);
-        Long shippingOrders = orderRepository.countByStatus(Order.OrderStatus.SHIPPING);
-        Long completedOrders = orderRepository.countByStatus(Order.OrderStatus.COMPLETED);
-        Long cancelledOrders = orderRepository.countByStatus(Order.OrderStatus.CANCELLED);
+        Map<String, BigDecimal> revenueByDate = new LinkedHashMap<>();
+        for (Object[] row : revenueResults) {
+            String dateKey = (String) row[0];
+            BigDecimal revenue = (BigDecimal) row[1];
+            revenueByDate.put(dateKey, revenue);
+        }
 
-        List<StatisticsResponse.TopSellingProduct> topSellingProducts = getTopSellingProducts(10);
-
-        Map<String, BigDecimal> revenueByDate = getRevenueByDate(startOfMonth, now);
-
+        // =============================================
+        // TẠO VÀ TRẢ VỀ RESPONSE
+        // =============================================
         return StatisticsResponse.builder()
                 .totalRevenue(totalRevenue)
                 .totalOrders(totalOrders)
@@ -60,67 +96,4 @@ public class StatisticsService {
                 .build();
     }
 
-    public StatisticsResponse getStatisticsByDateRange(LocalDateTime startDate, LocalDateTime endDate) {
-        BigDecimal totalRevenue = orderRepository.calculateRevenueBetweenDates(startDate, endDate);
-
-        if (totalRevenue == null) {
-            totalRevenue = BigDecimal.ZERO;
-        }
-
-        List<Order> orders = orderRepository.findOrdersBetweenDates(startDate, endDate);
-
-        Long totalOrders = (long) orders.size();
-        Long pendingOrders = orders.stream().filter(o -> o.getStatus() == Order.OrderStatus.PENDING).count();
-        Long shippingOrders = orders.stream().filter(o -> o.getStatus() == Order.OrderStatus.SHIPPING).count();
-        Long completedOrders = orders.stream().filter(o -> o.getStatus() == Order.OrderStatus.COMPLETED).count();
-        Long cancelledOrders = orders.stream().filter(o -> o.getStatus() == Order.OrderStatus.CANCELLED).count();
-
-        List<StatisticsResponse.TopSellingProduct> topSellingProducts = getTopSellingProducts(10);
-        Map<String, BigDecimal> revenueByDate = getRevenueByDate(startDate, endDate);
-
-        return StatisticsResponse.builder()
-                .totalRevenue(totalRevenue)
-                .totalOrders(totalOrders)
-                .totalCustomers(userService.getTotalCustomers())
-                .totalProducts(productService.getTotalProducts())
-                .pendingOrders(pendingOrders)
-                .shippingOrders(shippingOrders)
-                .completedOrders(completedOrders)
-                .cancelledOrders(cancelledOrders)
-                .topSellingProducts(topSellingProducts)
-                .revenueByDate(revenueByDate)
-                .build();
-    }
-
-    private List<StatisticsResponse.TopSellingProduct> getTopSellingProducts(int limit) {
-        List<Object[]> results = orderItemRepository.findTopSellingProducts(limit);
-
-        List<StatisticsResponse.TopSellingProduct> topProducts = new ArrayList<>();
-
-        for (Object[] result : results) {
-            StatisticsResponse.TopSellingProduct product = StatisticsResponse.TopSellingProduct.builder()
-                    .productId(((Number) result[0]).longValue())
-                    .productName((String) result[1])
-                    .totalQuantitySold(((Number) result[2]).longValue())
-                    .totalRevenue((BigDecimal) result[3])
-                    .build();
-            topProducts.add(product);
-        }
-
-        return topProducts.stream().limit(limit).collect(Collectors.toList());
-    }
-
-    private Map<String, BigDecimal> getRevenueByDate(LocalDateTime startDate, LocalDateTime endDate) {
-        List<Order> orders = orderRepository.findOrdersBetweenDates(startDate, endDate);
-
-        Map<String, BigDecimal> revenueMap = new TreeMap<>();
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy");
-
-        for (Order order : orders) {
-            String dateKey = order.getCreatedAt().format(formatter);
-            revenueMap.merge(dateKey, order.getTotalPrice(), BigDecimal::add);
-        }
-
-        return revenueMap;
-    }
 }

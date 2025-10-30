@@ -24,7 +24,7 @@ public class Order {
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id", nullable = false)
+    @JoinColumn(name = "user_id", nullable = true)
     private User user;
 
     @Column(name = "total_price", nullable = false, precision = 18, scale = 2)
@@ -64,6 +64,11 @@ public class Order {
     public void addOrderItem(OrderItem item) {
         orderItems.add(item);
         item.setOrder(this);
+    }
+
+    // ✅ THÊM MỚI: Helper để check guest order
+    public boolean isGuestOrder() {
+        return user == null;
     }
 
     // Enum

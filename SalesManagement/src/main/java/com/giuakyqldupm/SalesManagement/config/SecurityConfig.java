@@ -50,7 +50,10 @@ public class SecurityConfig {
                                 "/swagger-ui/**",
                                 "/v3/api-docs/**",
                                 "/swagger-ui.html",
-                                "/api-docs/**")
+                                "/api-docs/**",
+                                "/api/orders/guest",
+                                "/api/orders/admin",
+                                "/api/admin/orders/search/")
                         .permitAll()
 
                         // Admin endpoints

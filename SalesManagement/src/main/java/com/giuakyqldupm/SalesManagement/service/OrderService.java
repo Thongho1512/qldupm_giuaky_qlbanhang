@@ -1,6 +1,7 @@
 package com.giuakyqldupm.SalesManagement.service;
 
 import com.giuakyqldupm.SalesManagement.dto.request.CartItemRequest;
+import com.giuakyqldupm.SalesManagement.dto.request.GuestOrderRequest;
 import com.giuakyqldupm.SalesManagement.dto.request.OrderRequest;
 import com.giuakyqldupm.SalesManagement.dto.response.OrderItemResponse;
 import com.giuakyqldupm.SalesManagement.dto.response.OrderResponse;
@@ -46,7 +47,7 @@ public class OrderService {
         order.setRecipientPhone(request.getRecipientPhone());
         order.setNotes(request.getNotes());
         order.setPaymentMethod(request.getPaymentMethod());
-        order.setStatus(Order.OrderStatus.PENDING);
+        order.setStatus(Order.OrderStatus.COMPLETED);
 
         BigDecimal totalPrice = BigDecimal.ZERO;
         List<OrderItem> orderItems = new ArrayList<>();
@@ -184,9 +185,9 @@ public class OrderService {
 
         return OrderResponse.builder()
                 .id(order.getId())
-                .userId(order.getUser().getId())
-                .username(order.getUser().getUsername())
-                .userEmail(order.getUser().getEmail())
+                .userId(order.getUser() != null ? order.getUser().getId() : null)
+                .username(order.getUser() != null ? order.getUser().getUsername() : null)
+                .userEmail(order.getUser() != null ? order.getUser().getEmail() : null)
                 .totalPrice(order.getTotalPrice())
                 .status(order.getStatus().name())
                 .paymentMethod(order.getPaymentMethod())
@@ -209,6 +210,80 @@ public class OrderService {
                 .price(item.getPrice())
                 .subtotal(item.getSubtotal())
                 .productImageUrl(item.getProduct().getImageUrl())
+                .build();
+    }
+
+    // ✅ THÊM METHOD MỚI vào cuối class OrderService
+
+    @Transactional
+    public OrderResponse createGuestOrder(GuestOrderRequest request) {
+        // Tạo đơn hàng mới
+        Order order = new Order();
+
+        // ⚠️ QUAN TRỌNG: Không set user, chỉ set guestEmail
+        order.setUser(null);
+
+        order.setShippingAddress(request.getShippingAddress());
+        order.setRecipientName(request.getRecipientName());
+        order.setRecipientPhone(request.getRecipientPhone());
+        order.setNotes(request.getNotes());
+        order.setPaymentMethod(request.getPaymentMethod());
+        order.setStatus(Order.OrderStatus.PENDING);
+
+        BigDecimal totalPrice = BigDecimal.ZERO;
+        List<OrderItem> orderItems = new ArrayList<>();
+
+        for (CartItemRequest item : request.getItems()) {
+            Product product = productRepository.findById(item.getProductId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Product", "id", item.getProductId()));
+
+            if (product.getStock() < item.getQuantity()) {
+                throw new BadRequestException("Insufficient stock for product: " + product.getName());
+            }
+
+            BigDecimal subtotal = product.getPrice().multiply(BigDecimal.valueOf(item.getQuantity()));
+
+            OrderItem orderItem = new OrderItem();
+            orderItem.setProduct(product);
+            orderItem.setProductName(product.getName());
+            orderItem.setQuantity(item.getQuantity());
+            orderItem.setPrice(product.getPrice());
+            orderItem.setSubtotal(subtotal);
+
+            order.addOrderItem(orderItem);
+            orderItems.add(orderItem);
+
+            totalPrice = totalPrice.add(subtotal);
+
+            // Cập nhật stock
+            productService.updateStock(product.getId(), item.getQuantity());
+        }
+
+        order.setTotalPrice(totalPrice);
+        Order savedOrder = orderRepository.save(order);
+
+        return mapToGuestOrderResponse(savedOrder);
+    }
+
+    private OrderResponse mapToGuestOrderResponse(Order order) {
+        List<OrderItemResponse> itemResponses = order.getOrderItems().stream()
+                .map(this::mapItemToResponse)
+                .collect(Collectors.toList());
+
+        return OrderResponse.builder()
+                .id(order.getId())
+                .userId(null) // ← Guest không có userId
+                .username("Guest") // ← Hiển thị "Guest"
+                .totalPrice(order.getTotalPrice())
+                .status(order.getStatus().name())
+                .paymentMethod(order.getPaymentMethod())
+                .shippingAddress(order.getShippingAddress())
+                .recipientName(order.getRecipientName())
+                .recipientPhone(order.getRecipientPhone())
+                .notes(order.getNotes())
+                .items(itemResponses)
+                .createdAt(order.getCreatedAt())
+                .updatedAt(order.getUpdatedAt())
                 .build();
     }
 

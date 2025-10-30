@@ -1,5 +1,6 @@
 package com.giuakyqldupm.SalesManagement.controller;
 
+import com.giuakyqldupm.SalesManagement.dto.request.GuestOrderRequest;
 import com.giuakyqldupm.SalesManagement.dto.request.OrderRequest;
 import com.giuakyqldupm.SalesManagement.dto.response.ApiResponse;
 import com.giuakyqldupm.SalesManagement.dto.response.OrderResponse;
@@ -15,9 +16,6 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.security.access.prepost.PreAuthorize;
-import jakarta.validation.Valid;
-import org.springframework.http.HttpStatus;
-import io.swagger.v3.oas.annotations.Operation;
 
 @RestController
 @RequestMapping("/api/orders")
@@ -68,9 +66,8 @@ public class OrderController {
 
     // ============ ADMIN ORDER MANAGEMENT ============
     @GetMapping("/admin")
-    @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Get all orders (admin)")
-    public ResponseEntity<ApiResponse<com.giuakyqldupm.SalesManagement.dto.response.PageResponse<OrderResponse>>> getAllOrdersAdmin(
+    public ResponseEntity<ApiResponse<com.giuakyqldupm.SalesManagement.dto.response.PageResponse<OrderResponse>>> getAllOrders(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(defaultValue = "createdAt") String sortBy,
@@ -102,5 +99,15 @@ public class OrderController {
             @Valid @RequestBody com.giuakyqldupm.SalesManagement.dto.request.UpdateOrderStatusRequest request) {
         OrderResponse order = orderService.updateOrderStatus(id, request.getStatus());
         return ResponseEntity.ok(ApiResponse.success("Order status updated successfully", order));
+    }
+
+    @PostMapping("/guest")
+    @Operation(summary = "Create order for guest (no authentication required)")
+    public ResponseEntity<ApiResponse<OrderResponse>> createGuestOrder(
+            @Valid @RequestBody GuestOrderRequest request) {
+        OrderResponse order = orderService.createGuestOrder(request);
+        return ResponseEntity
+                .status(HttpStatus.CREATED)
+                .body(ApiResponse.success("Order created successfully", order));
     }
 }

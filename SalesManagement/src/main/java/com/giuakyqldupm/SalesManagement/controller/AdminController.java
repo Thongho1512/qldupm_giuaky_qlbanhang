@@ -87,6 +87,7 @@ public class AdminController {
         return ResponseEntity.ok(ApiResponse.success("Orders retrieved successfully", orders));
     }
 
+    @PreAuthorize("permitAll()")
     @GetMapping("/orders/search")
     @Operation(summary = "Search orders")
     public ResponseEntity<ApiResponse<PageResponse<OrderResponse>>> searchOrders(
