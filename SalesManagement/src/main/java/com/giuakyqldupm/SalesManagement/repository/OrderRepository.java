@@ -20,11 +20,10 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 
         Page<Order> findByStatus(Order.OrderStatus status, Pageable pageable);
 
-        @Query("SELECT o FROM Order o WHERE " +
-                        "o.user.username LIKE %:keyword% OR " +
-                        "o.recipientName LIKE %:keyword% OR " +
-                        "o.recipientPhone LIKE %:keyword% OR " +
-                        "CAST(o.id AS string) LIKE %:keyword%")
+        @Query("SELECT o FROM Order o LEFT JOIN o.user u WHERE " +
+                        "o.recipientName LIKE CONCAT('%', :keyword, '%') OR " +
+                        "o.recipientPhone LIKE CONCAT('%', :keyword, '%') OR " +
+                        "CAST(o.id AS string) LIKE CONCAT('%', :keyword, '%')")
         Page<Order> searchOrders(@Param("keyword") String keyword, Pageable pageable);
 
         @Query("SELECT o FROM Order o WHERE o.user.id = :userId AND o.status = :status")
