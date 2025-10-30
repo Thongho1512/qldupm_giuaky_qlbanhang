@@ -24,7 +24,6 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import com.giuakyqldupm.SalesManagement.security.JwtAuthenticationFilter;
 
 import java.util.Arrays;
-import java.util.List;
 
 @Configuration
 @EnableWebSecurity
@@ -41,7 +40,7 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(auth -> auth
-                        // Public endpoints
+                        // ✅ Public endpoints (không cần đăng nhập)
                         .requestMatchers(
                                 "/api/auth/**",
                                 "/api/products/**",
@@ -53,14 +52,15 @@ public class SecurityConfig {
                                 "/api-docs/**",
                                 "/api/orders/guest",
                                 "/api/orders/admin",
-                                "/api/admin/orders/search/")
+                                "/api/admin/orders/search" // ⚡ CRITICAL FIX
+                        )
                         .permitAll()
 
-                        // Admin endpoints
+                        // ✅ Admin endpoints (cần role ADMIN)
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .requestMatchers("/api/statistics/**").hasRole("ADMIN")
 
-                        // User endpoints
+                        // ✅ User endpoints (cần đăng nhập)
                         .requestMatchers("/api/orders/**").authenticated()
                         .requestMatchers("/api/users/me").authenticated()
 
