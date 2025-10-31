@@ -48,19 +48,9 @@ const TrackOrderPage: React.FC = () => {
 
       const data = response.data?.data;
       
-      if (data && data.content) {
-        // ✅ Filter chỉ lấy đơn hàng guest (không có userId hoặc có guestEmail)
-        const guestOrders = data.content.filter(
-          (order: Order) => order.userId === null || order.userEmail?.includes(searchKeyword)
-        );
-        
-        setOrders(guestOrders);
-        
-        if (guestOrders.length === 0) {
-          toast.error('Không tìm thấy đơn hàng nào với thông tin này');
-        } else {
-          toast.success(`Tìm thấy ${guestOrders.length} đơn hàng`);
-        }
+      if (data && data.content && data.content.length > 0) {
+        setOrders(data.content); 
+        toast.success(`Tìm thấy ${data.content.length} đơn hàng`);
       } else {
         setOrders([]);
         toast.error('Không tìm thấy đơn hàng');
